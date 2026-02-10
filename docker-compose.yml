@@ -1,0 +1,20 @@
+services:
+  dash-ra-monitor:
+    build: .
+    image: ceia-ufg/dash-ra-monitor
+    container_name: dash-ra-monitor
+
+    env_file:
+      - src/.env
+
+    ports:
+      - "${PORT}:${PORT}"
+
+    networks:
+      - dash-ra-monitor
+
+    restart: unless-stopped
+
+networks:
+  dash-ra-monitor:
+    driver: bridge
