@@ -1,0 +1,23 @@
+/* Custom row styles for AgGrid */
+.ag-theme-quartz .ag-row.row-success .ag-cell {
+  background-color: #d4edda !important; /* light green */
+}
+.ag-theme-quartz .ag-row.row-fail .ag-cell {
+  background-color: #f8d7da !important; /* light red */
+}
+
+/* Ensure wrapped text displays correctly when autoHeight is used */
+.ag-theme-quartz .ag-cell-wrap-text .ag-cell-value {
+  white-space: normal !important;
+  line-height: 1.3 !important;
+  font-family: monospace;
+}
+
+/* Fallback: more specific cell selector in case classes are on different elements */
+.ag-theme-quartz .ag-row.row-success .ag-cell, .ag-theme-quartz .row-success.ag-row .ag-cell {
+  background-color: #d4edda !important;
+}
+.ag-theme-quartz .ag-row.row-fail .ag-cell, .ag-theme-quartz .row-fail.ag-row .ag-cell {
+  background-color: #f8d7da !important;
+}
+

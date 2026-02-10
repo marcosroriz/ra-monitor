@@ -5,6 +5,7 @@
 # Imports básicos
 import os
 import pandas as pd
+from datetime import datetime, timedelta
 
 # Dotenv
 from dotenv import load_dotenv
@@ -18,7 +19,7 @@ import dash_bootstrap_components as dbc
 import dash_auth
 import dash_mantine_components as dmc
 from dash import Dash, _dash_renderer, dcc, html, callback, Input, Output, State
-from dash import dash_table
+import dash_ag_grid as dag
 
 # Dash componentes Mantine e icones
 import dash_mantine_components as dmc
@@ -89,11 +90,11 @@ pio.templates.default = "tema"
 # DASH #######################################################################
 ##############################################################################
 
-BASE_DIR = os.getcwd()  
+BASE_DIR = os.getcwd()
 
 # Caminhos absolutos
 ASSETS_PATH = os.path.join(BASE_DIR, "assets")
-PAGES_PATH = os.path.join(BASE_DIR, "pages")  
+PAGES_PATH = os.path.join(BASE_DIR, "pages")
 
 # Dash
 app = Dash(
@@ -112,9 +113,7 @@ server = app.server
 # Menu / Navbar
 def criarMenu(dirVertical=True):
     return dbc.Nav(
-        [
-            dbc.NavLink("Monitoramento", href="/", active="exact")
-        ],
+        [dbc.NavLink("Monitoramento", href="/", active="exact")],
         class_name="dash-bootstrap",
         vertical=dirVertical,
         pills=True,
@@ -168,163 +167,171 @@ header = dmc.Group(
 
 
 # Corpo do app
-app_shell = dmc.AppShell(
-    [
-        dmc.AppShellHeader(header, p=24, style={"backgroundColor": "#f8f9fa"}),
-        dmc.AppShellNavbar(id="navbar", children=criarMenu(dirVertical=True), py="md", px=4),
-        dmc.AppShellMain(
-            dmc.DatesProvider(
-                children=dbc.Container(
-                    [
-                        dcc.Location(id="url", refresh="callback-nav"),
-                        html.Div(id="scroll-hook", style={"display": "none"}),
-                        dcc.Store(id="store-window-size"),
-                        dcc.Interval(id="refresh-interval", interval=30 * 1000, n_intervals=0),
-                        html.Div(
-                            id="main-content",
-                            children=[
-                                dbc.Row(
-                                    [
-                                        dbc.Col(
+def criarLayoutPagina():
+    return dmc.MantineProvider(
+        dmc.AppShell(
+            [
+                dmc.AppShellHeader(header, p=24, style={"backgroundColor": "#f8f9fa"}),
+                dmc.AppShellNavbar(id="navbar", children=criarMenu(dirVertical=True), py="md", px=4),
+                dmc.AppShellMain(
+                    dmc.DatesProvider(
+                        children=dbc.Container(
+                            [
+                                dcc.Location(id="url", refresh="callback-nav"),
+                                html.Div(id="scroll-hook", style={"display": "none"}),
+                                dcc.Store(id="store-window-size"),
+                                dcc.Interval(id="refresh-interval", interval=30 * 1000, n_intervals=0),
+                                html.Div(
+                                    id="main-content",
+                                    children=[
+                                        dbc.Row(
                                             [
-                                                dcc.DatePickerRange(
-                                                    id="date-range",
-                                                    display_format="YYYY-MM-DD",
-                                                    clearable=True,
-                                                )
-                                            ],
-                                            md=4,
-                                        ),
-                                        dbc.Col(
-                                            [
-                                                dcc.Dropdown(
-                                                    id="script-filter",
-                                                    multi=True,
-                                                    placeholder="Filtrar por script",
-                                                )
-                                            ],
-                                            md=5,
-                                        ),
-                                        dbc.Col(
-                                            [
-                                                dbc.Checklist(
-                                                    id="only-failures",
-                                                    options=[
-                                                        {
-                                                            "label": "Apenas falhas",
-                                                            "value": "only",
-                                                        }
+                                                dbc.Col(
+                                                    [
+                                                        dcc.DatePickerRange(
+                                                            id="date-range",
+                                                            display_format="YYYY-MM-DD",
+                                                            clearable=True,
+                                                            start_date=(datetime.now() - timedelta(days=30)).strftime(
+                                                                "%Y-%m-%d"
+                                                            ),
+                                                            end_date=datetime.now().strftime("%Y-%m-%d"),
+                                                        )
                                                     ],
-                                                    value=[],
-                                                    switch=True,
-                                                )
+                                                    md=4,
+                                                ),
+                                                dbc.Col(
+                                                    [
+                                                        dcc.Dropdown(
+                                                            id="script-filter",
+                                                            multi=True,
+                                                            placeholder="Filtrar por script",
+                                                        )
+                                                    ],
+                                                    md=5,
+                                                ),
+                                                dbc.Col(
+                                                    [
+                                                        dbc.Checklist(
+                                                            id="only-failures",
+                                                            options=[
+                                                                {
+                                                                    "label": "Apenas falhas",
+                                                                    "value": "only",
+                                                                }
+                                                            ],
+                                                            value=[],
+                                                            switch=True,
+                                                        )
+                                                    ],
+                                                    md=3,
+                                                ),
                                             ],
-                                            md=3,
+                                            className="mb-3",
+                                        ),
+                                        dbc.Row(
+                                            [
+                                                dbc.Col(
+                                                    dbc.Card(
+                                                        dbc.CardBody(
+                                                            [
+                                                                html.H6("Execuções no período"),
+                                                                html.H3(id="kpi-total-runs"),
+                                                            ]
+                                                        ),
+                                                        className="mb-3",
+                                                    ),
+                                                    md=3,
+                                                ),
+                                                dbc.Col(
+                                                    dbc.Card(
+                                                        dbc.CardBody(
+                                                            [
+                                                                html.H6("Taxa de sucesso"),
+                                                                html.H3(id="kpi-success-rate"),
+                                                            ]
+                                                        ),
+                                                        className="mb-3",
+                                                    ),
+                                                    md=3,
+                                                ),
+                                                dbc.Col(
+                                                    dbc.Card(
+                                                        dbc.CardBody(
+                                                            [
+                                                                html.H6("Última falha"),
+                                                                html.H5(id="kpi-last-failure"),
+                                                            ]
+                                                        ),
+                                                        className="mb-3",
+                                                    ),
+                                                    md=3,
+                                                ),
+                                                dbc.Col(
+                                                    dbc.Card(
+                                                        dbc.CardBody(
+                                                            [
+                                                                html.H6("Scripts distintos"),
+                                                                html.H3(id="kpi-distinct-scripts"),
+                                                            ]
+                                                        ),
+                                                        className="mb-3",
+                                                    ),
+                                                    md=3,
+                                                ),
+                                            ]
+                                        ),
+                                        dbc.Row(
+                                            [
+                                                dbc.Col(
+                                                    dcc.Graph(
+                                                        id="runs-over-time",
+                                                        # style={"height": "350px"},
+                                                    ),
+                                                    md=6,
+                                                ),
+                                                dbc.Col(
+                                                    dcc.Graph(
+                                                        id="execution-time-by-script",
+                                                        # style={"height": "350px"},
+                                                    ),
+                                                    md=6,
+                                                ),
+                                            ],
+                                            className="mb-3",
+                                        ),
+                                        dbc.Row(
+                                            [
+                                                dbc.Col(
+                                                    html.Div(
+                                                        id="table-container",
+                                                    )
+                                                )
+                                            ]
                                         ),
                                     ],
-                                    className="mb-3",
-                                ),
-                                dbc.Row(
-                                    [
-                                        dbc.Col(
-                                            dbc.Card(
-                                                dbc.CardBody(
-                                                    [
-                                                        html.H6("Execuções no período"),
-                                                        html.H3(id="kpi-total-runs"),
-                                                    ]
-                                                ),
-                                                className="mb-3",
-                                            ),
-                                            md=3,
-                                        ),
-                                        dbc.Col(
-                                            dbc.Card(
-                                                dbc.CardBody(
-                                                    [
-                                                        html.H6("Taxa de sucesso"),
-                                                        html.H3(id="kpi-success-rate"),
-                                                    ]
-                                                ),
-                                                className="mb-3",
-                                            ),
-                                            md=3,
-                                        ),
-                                        dbc.Col(
-                                            dbc.Card(
-                                                dbc.CardBody(
-                                                    [
-                                                        html.H6("Última falha"),
-                                                        html.H5(id="kpi-last-failure"),
-                                                    ]
-                                                ),
-                                                className="mb-3",
-                                            ),
-                                            md=3,
-                                        ),
-                                        dbc.Col(
-                                            dbc.Card(
-                                                dbc.CardBody(
-                                                    [
-                                                        html.H6("Scripts distintos"),
-                                                        html.H3(id="kpi-distinct-scripts"),
-                                                    ]
-                                                ),
-                                                className="mb-3",
-                                            ),
-                                            md=3,
-                                        ),
-                                    ]
-                                ),
-                                dbc.Row(
-                                    [
-                                        dbc.Col(
-                                            dcc.Graph(
-                                                id="runs-over-time",
-                                                style={"height": "350px"},
-                                            ),
-                                            md=6,
-                                        ),
-                                        dbc.Col(
-                                            dcc.Graph(
-                                                id="execution-time-by-script",
-                                                style={"height": "350px"},
-                                            ),
-                                            md=6,
-                                        ),
-                                    ],
-                                    className="mb-3",
-                                ),
-                                dbc.Row(
-                                    [
-                                        dbc.Col(
-                                            html.Div(
-                                                id="table-container",
-                                            )
-                                        )
-                                    ]
                                 ),
                             ],
+                            fluid=True,
+                            className="dbc dbc-ag-grid",
                         ),
-                    ],
-                    fluid=True,
-                    className="dbc dbc-ag-grid",
+                        settings={"locale": "pt"},
+                    ),
                 ),
-                settings={"locale": "pt"},
-            ),
-        ),
-    ],
-    header={"height": 100},
-    navbar={
-        "width": 300,
-        "breakpoint": "sm",
-        "collapsed": {"desktop": True, "mobile": True},
-    },
-    padding="md",
-    id="app-shell",
-)
+            ],
+            header={"height": 100},
+            navbar={
+                "width": 300,
+                "breakpoint": "sm",
+                "collapsed": {"desktop": True, "mobile": True},
+            },
+            padding="md",
+            id="app-shell",
+        )
+    )
 
-app.layout = dmc.MantineProvider(app_shell)
+
+app.layout = criarLayoutPagina
 
 
 @callback(
@@ -337,9 +344,9 @@ def toggle_navbar(opened, navbar):
     return navbar
 
 
-def _load_script_log():
+def _load_script_log(start_date=None, end_date=None):
     """
-    Carrega os últimos registros da tabela de log de execução de scripts.
+    Carrega os registros da tabela de log de execução de scripts filtrados por data.
     """
     query = """
         SELECT
@@ -350,9 +357,19 @@ def _load_script_log():
             exception_text,
             execution_time_ms
         FROM public.script_execution_log
-        ORDER BY executed_at DESC
-        LIMIT 1000
+        WHERE 1=1
     """
+
+    if start_date:
+        start_date_str = pd.to_datetime(start_date).strftime("%Y-%m-%d")
+        query += f" AND executed_at >= '{start_date_str}'"
+
+    if end_date:
+        end_date_str = (pd.to_datetime(end_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+        query += f" AND executed_at < '{end_date_str}'"
+
+    query += " ORDER BY executed_at DESC "
+
     df = pd.read_sql(query, pgEngine)
     if not df.empty:
         df["executed_at"] = pd.to_datetime(df["executed_at"])
@@ -375,7 +392,7 @@ def _load_script_log():
     Input("only-failures", "value"),
 )
 def atualizar_dashboard(n_intervals, scripts, start_date, end_date, only_failures_values):
-    df = _load_script_log()
+    df = _load_script_log(start_date=start_date, end_date=end_date)
 
     if df.empty:
         empty_fig = go.Figure().update_layout(
@@ -396,13 +413,6 @@ def atualizar_dashboard(n_intervals, scripts, start_date, end_date, only_failure
         )
 
     # Filtros
-    if start_date:
-        start_ts = pd.to_datetime(start_date)
-        df = df[df["executed_at"] >= start_ts]
-    if end_date:
-        end_ts = pd.to_datetime(end_date) + pd.Timedelta(days=1)
-        df = df[df["executed_at"] < end_ts]
-
     if scripts:
         df = df[df["script_name"].isin(scripts)]
 
@@ -427,6 +437,9 @@ def atualizar_dashboard(n_intervals, scripts, start_date, end_date, only_failure
         distinct_scripts = 0
 
     # Gráfico 1: execuções ao longo do tempo (tempo de execução)
+    # Converter de ms para minutos
+    df["execution_time_min"] = df["execution_time_ms"] / 60000
+
     fig_time = go.Figure()
     for status_value, nome_status, color in [
         (True, "Sucesso", tema.PALETA_CORES[0] if hasattr(tema, "PALETA_CORES") else "#2ca02c"),
@@ -438,13 +451,13 @@ def atualizar_dashboard(n_intervals, scripts, start_date, end_date, only_failure
         fig_time.add_trace(
             go.Scatter(
                 x=df_status["executed_at"],
-                y=df_status["execution_time_ms"],
+                y=df_status["execution_time_min"],
                 mode="markers",
                 name=nome_status,
                 marker=dict(color=color, size=8, opacity=0.8),
                 hovertemplate=(
                     "Script: %{customdata[0]}<br>"
-                    "Tempo: %{y} ms<br>"
+                    "Tempo: %{y:.2f} min<br>"
                     "Executado em: %{x|%Y-%m-%d %H:%M:%S}<extra></extra>"
                 ),
                 customdata=df_status[["script_name"]],
@@ -454,23 +467,26 @@ def atualizar_dashboard(n_intervals, scripts, start_date, end_date, only_failure
     fig_time.update_layout(
         title="Tempo de execução por execução",
         xaxis_title="Executado em",
-        yaxis_title="Tempo de execução (ms)",
+        yaxis_title="Tempo de execução (min)",
         legend_title="Status",
-        margin=dict(l=40, r=20, t=60, b=40),
+        margin=dict(l=80, r=20, t=60, b=80),
+        xaxis=dict(automargin=True),
+        yaxis=dict(automargin=True),
+        height=500,
     )
 
     # Gráfico 2: tempo médio por script
     df_time_script = (
-        df.groupby("script_name")["execution_time_ms"]
+        df.groupby("script_name")["execution_time_min"]
         .mean()
         .reset_index()
-        .sort_values("execution_time_ms", ascending=False)
+        .sort_values("execution_time_min", ascending=False)
     )
 
     fig_script = go.Figure(
         data=[
             go.Bar(
-                x=df_time_script["execution_time_ms"],
+                x=df_time_script["execution_time_min"],
                 y=df_time_script["script_name"],
                 orientation="h",
             )
@@ -478,50 +494,49 @@ def atualizar_dashboard(n_intervals, scripts, start_date, end_date, only_failure
     )
     fig_script.update_layout(
         title="Tempo médio de execução por script",
-        xaxis_title="Tempo médio (ms)",
+        xaxis_title="Tempo médio (min)",
         yaxis_title="Script",
-        margin=dict(l=120, r=20, t=60, b=40),
+        margin=dict(l=250, r=20, t=60, b=40),
+        yaxis=dict(automargin=True),
+        height=500,
     )
 
     # Tabela de execuções recentes
     df_table = df.copy()
     df_table["executed_at"] = df_table["executed_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
     df_table["status"] = df_table["status_complete"].map({True: "Sucesso", False: "Falha"})
+    df_table["execution_time_min"] = df_table["execution_time_min"].round(2)
     df_table = df_table.sort_values("executed_at", ascending=False).head(200)
 
     columns = [
-        {"name": "ID", "id": "id"},
-        {"name": "Executado em", "id": "executed_at"},
-        {"name": "Script", "id": "script_name"},
-        {"name": "Status", "id": "status"},
-        {"name": "Tempo (ms)", "id": "execution_time_ms"},
-        {"name": "Exceção", "id": "exception_text"},
+        {"field": "id", "headerName": "ID"},
+        {"field": "executed_at", "headerName": "Executado em"},
+        {"field": "script_name", "headerName": "Script"},
+        {"field": "status", "headerName": "Status"},
+        {"field": "execution_time_min", "headerName": "Tempo (min)"},
+        {"field": "exception_text", "headerName": "Exceção", "wrapText": True, "autoHeight": True, "flex": 1},
     ]
 
-    table = dash_table.DataTable(
+    table = dag.AgGrid(
         id="runs-table",
-        columns=columns,
-        data=df_table.to_dict("records"),
-        page_size=20,
-        style_table={"overflowX": "auto"},
-        style_cell={"textAlign": "left", "fontFamily": "Roboto, sans-serif", "fontSize": "12px"},
-        style_header={"fontWeight": "bold"},
-        style_data_conditional=[
-            {
-                "if": {"filter_query": "{status} = 'Falha'"},
-                "backgroundColor": "#f8d7da",
+        rowData=df_table.to_dict("records"),
+        columnDefs=columns,
+        defaultColDef={"sortable": True, "filter": True, "resizable": True},
+        dashGridOptions={
+            "enableCellTextSelection": True,
+            "pagination": True,
+            "paginationPageSize": 20,
+            "rowClassRules": {
+                "row-success": "params.data && params.data.status === 'Sucesso'",
+                "row-fail": "params.data && params.data.status === 'Falha'",
             },
-            {
-                "if": {"filter_query": "{status} = 'Sucesso'"},
-                "backgroundColor": "#d4edda",
-            },
-        ],
+        },
+        style={"height": "600px", "resize": "vertical", "overflow": "hidden"},
+        className="ag-theme-quartz",
     )
 
     # Opções do filtro de script
-    script_options = [
-        {"label": s, "value": s} for s in sorted(df["script_name"].dropna().unique())
-    ]
+    script_options = [{"label": s, "value": s} for s in sorted(df["script_name"].dropna().unique())]
 
     return (
         str(total_runs),
@@ -596,5 +611,4 @@ if __name__ == "__main__":
             profile_dir=PROF_DIR,
         )
 
-    print("RUNNING ON HOST:", APP_HOST, "PORT:", APP_PORT, "DEBUG:", APP_DEBUG, "PROFILE:", PROFILE)
     app.run(host=APP_HOST, debug=APP_DEBUG, port=APP_PORT)
